@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diabetes Nutrition Tracker - Combined Report Download</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    margin: 20px; max-width: 960px; background: #f7f9fc; color: #222;
+  }
+  h1 {
+    text-align: center; margin-bottom: 5px; color: #005a87;
+  }
+  .container {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+  }
+  .panel {
+    background: white; padding: 20px; border-radius: 8px;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+  }
+  .left-panel {
+    flex: 1 1 400px;
+    min-width: 320px;
+  }
+  .right-panel {
+    flex: 1 1 550px;
+    min-width: 350px;
+  }
+  label {
+    display: block; margin: 12px 0 6px; font-weight: 600; color: #00435f;
+  }
+  input[type="number"], input[list], input[type="datetime-local"], select {
+    width: 100%; padding: 10px 12px; font-size: 1rem;
+    border: 1.8px solid #ddd; border-radius: 6px;
+    transition: border-color 0.3s ease;
+  }
+  input[type="number"]:focus, input[list]:focus, input[type="datetime-local"]:focus, select:focus {
+    outline: none; border-color: #0096c7; box-shadow: 0 0 5px #0096c7;
+  }
+  button {
+    margin-top: 20px; padding: 12px; width: 100%; font-size: 1.1rem;
+    background: #0077b6; border: none; color: white; font-weight: 700;
+    border-radius: 6px; cursor: pointer; transition: background-color 0.25s ease;
+  }
+  button:hover {
+    background: #005f87;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin-top: 10px;
+  }
+  th, td {
+    border: 1px solid #ddd; padding: 8px; text-align: right;
+  }
+  th {
+    background-color: #f2f2f2; font-weight: 700;
+  }
+  td:first-child, td.timestamp-cell {
+    text-align: left;
+  }
+  .section-title {
+    margin-top: 0; color: #0077b6; font-weight: 700; text-align: center;
+  }
+  /* Responsive */
+  @media (max-width: 750px) {
+    .container {
+      flex-direction: column;
+    }
+    .left-panel, .right-panel {
+      min-width: 100%;
+      flex: 1 1 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Diabetes Nutrition Tracker</h1>
+
+<div class="container">
+
+  <section class="panel left-panel" aria-label="Meal Entry">
+    <h2 class="section-title">Add Meal</h2>
+
+    <label for="food-input">Food Item:</label>
+    <input list="foods" id="food-input" placeholder="Start typing food..." autocomplete="off" />
+    <datalist id="foods"></datalist>
+
+    <label for="weight-input">Weight (grams):</label>
+    <input type="number" id="weight-input" min="1" value="100" />
+
+    <label for="datetime-input">Date & Time:</label>
+    <input type="datetime-local" id="datetime-input" />
+
+    <button id="add-meal-btn">Add to Meals</button>
+
+    <h3>Meals Added</h3>
+    <table id="meals-table" aria-live="polite">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Food</th>
+          <th>Weight (g)</th>
+          <th>Protein</th>
+          <th>Potassium</th>
+          <th>Carbs</th>
+          <th>Fiber</th>
+          <th>Sugar</th>
+          <th>Calories</th>
+          <th>Phosphorus</th>
+          <th>Remove</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="panel right-panel" aria-label="Monthly Summary & Download">
+    <h2 class="section-title">Monthly Summary & Download</h2>
+
+    <label for="month-select">Select Month:</label>
+    <input type="month" id="month-select" />
+
+    <button id="load-month-btn">Load Summary</button>
+    <button id="download-combined-csv-btn" style="margin-top:8px;">Download Combined CSV</button>
+    <button id="download-combined-xlsx-btn" style="margin-top:8px;">Download Combined Excel (.xlsx)</button>
+
+    <h3 style="margin-top:20px;">Summary</h3>
+    <table id="monthly-summary-table" style="margin-top:5px;">
+      <thead>
+        <tr><th>Nutrient</th><th>Amount</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+  </section>
+
+</div>
+
+<!-- SheetJS for XLSX export -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/shim.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+<script>
+  const foodData = [
+      { "name" : "Compliments  Plain Greek Yogurt ", "nutrientsPer100g": { "Protein": 9.7143, "Potassium": 171.4286, "Carbs": 2.2857, "Fiber": 0, "Sugar": 2.2857, "Calories": 45.7143, "Phosphorus": 0 } },
+      { "name": "Greek Yogurt Plain", "nutrientsPer100g": { "Protein": 9.7143, "Potassium": 142.8571, "Carbs": 4.5714, "Fiber": 0, "Sugar": 2.8571, "Calories": 57.1429, "Phosphorus": 136 } },
+      { "name": "Greek Yogurt Vanilla", "nutrientsPer100g": { "Protein": 9.7143, "Potassium": 128.5714, "Carbs": 10.2857, "Fiber": 0, "Sugar": 9.1429, "Calories": 80, "Phosphorus": 101 } },
+      { "name": "Greek Low fat Yogurt", "nutrientsPer100g": { "Protein": 10, "Potassium": 141, "Carbs": 3.95, "Fiber": 0, "Sugar": 3.75, "Calories": 73, "Phosphorus": 126 } },
+      { "name": "Astro Yogurt", "nutrientsPer100g": { "Protein": 0, "Potassium": 171.4286, "Carbs": 6, "Fiber": 0, "Sugar": 11.4286, "Calories": 0, "Phosphorus": 0 } },
+      { "name": "Activia Yogurt", "nutrientsPer100g": { "Protein": 4.0, "Potassium": 200.0, "Carbs": 8.571429, "Fiber": 0.0, "Sugar": 6.285714, "Calories": 51.42857, "Phosphorus": 0.0 } },
+      { "name": "Liberte classic Yogurt", "nutrientsPer100g": { "protein": 0.0, "potassium": 142.85714285714286, "carbs": 12.0, "fiber": 0.0, "sugar": 10.285714285714285, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Babybel Cheese", "nutrientsPer100g": { "protein": 25.0, "potassium": 50.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 250.0, "phosphorus": 500.0 } },
+      { "name": "Brie Cheese-double cream President brand", "nutrientsPer100g": { "protein": 17.24138, "potassium": 103.4483, "carbs": 1.448276, "fiber": 0.0, "sugar": 0.0, "calories": 379.3103, "phosphorus": 350.0 } },
+      { "name": "Compliment brand Swiss Cheese", "nutrientsPer100g": { "protein": 31.578947368421055, "potassium": 78.94736842105263, "carbs": 2.6315789473684212, "fiber": 0.0, "sugar": 0.0, "calories": 289.47368421052636, "phosphorus": 605.0 } },
+      { "name": "Cottage Cheese-Compliments ", "nutrientsPer100g": { "protein": 12.8, "potassium": 108.0, "carbs": 6.4, "fiber": 0.0, "sugar": 5.6, "calories": 88.0, "phosphorus": 0.0 } },
+      { "name": "Cottage Cheese", "nutrientsPer100g": { "protein": 11.2, "potassium": 140.0, "carbs": 4.8, "fiber": 0.0, "sugar": 4.0, "calories": 80.0, "phosphorus": 0.0 } },
+      { "name": "Mozarella Cheese-Compliments", "nutrientsPer100g": { "protein": 25.0, "potassium": 75.0, "carbs": 2.5, "fiber": 0.0, "sugar": 0.0, "calories": 325.0, "phosphorus": 533.0 } },
+      { "name": "Mozarella Cheese-Belgioioso", "nutrientsPer100g": { "protein": 17.85714, "potassium": 95.0, "carbs": 3.571429, "fiber": 0.0, "sugar": 0.0, "calories": 321.4286, "phosphorus": 463.0 } },
+      { "name": "Lacey Swiss Cheese", "nutrientsPer100g": { "Protein": 28.22, "Potassium": 89.25, "Carbs": 3.5714, "Fiber": 0, "Sugar": 1.3, "Calories": 90, "Phosphorus": 500 } },
+      { "name": "Laughing cow-smoked cheese", "nutrientsPer100g": { "protein": 11.97, "potassium": 179.64, "carbs": 5.99, "fiber": 0.0, "sugar": 5.99, "calories": 149.7, "phosphorus": 0.0 } },
+      { "name": "Light Swiss Cheese-Fresh Market ", "nutrientsPer100g": { "protein": 25.93, "potassium": 37.04, "carbs": 3.7, "fiber": 0.0, "sugar": 0.0, "calories": 370.37, "phosphorus": 0.0 } },
+      { "name": "Zigg's Swiss Cheese", "nutrientsPer100g": { "protein": 35.0, "potassium": 150.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 300.0, "phosphorus": 0.0 } },
+      { "name": "Laughing cow-Light cream cheese", "nutrientsPer100g": { "protein": 9.09090909090909, "potassium": 179.64, "carbs": 6.0606060606060606, "fiber": 0.0, "sugar": 6.0606060606060606, "calories": 212.12121212121212, "phosphorus": 0.0 } },
+      { "name": "Ice Cream bar", "nutrientsPer100g": { "protein": 0.0, "potassium": 100.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Chapman Yogurt Cookies and Cream", "nutrientsPer100g": { "protein": 0.0, "potassium": 225.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Whole Milk-Powder", "nutrientsPer100g": { "protein": 30.0, "potassium": 1333.3333333333335, "carbs": 40.0, "fiber": 0.0, "sugar": 40.0, "calories": 500.0, "phosphorus": 101.0 } },
+      { "name": "Skim Milk Powder", "nutrientsPer100g": { "protein": 35.0, "potassium": 1720.0, "carbs": 55.0, "fiber": 0.0, "sugar": 55.0, "calories": 365.0, "phosphorus": 107.0 } },
+      { "name": "Coconut Crean", "nutrientsPer100g": { "protein": 0.0, "potassium": 0.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Coconut Milk", "nutrientsPer100g": { "protein": 0.0, "potassium": 0.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 100.0 } },
+      { "name": "Almond flour crackers- Simple Mills brand", "nutrientsPer100g": { "protein": 10.0, "potassium": 250.0, "carbs": 60.0, "fiber": 5.0, "sugar": 0.0, "calories": 500.0, "phosphorus": 0.0 } },
+      { "name": "Crunchmaster-Multi-grain baked crackers", "nutrientsPer100g": { "protein": 10.26, "potassium": 333.33, "carbs": 66.67, "fiber": 0.0, "sugar": 0.0, "calories": 461.54, "phosphorus": 0.0 } },
+      { "name": "Sweet Potato crackers-RW Garcia Brand", "nutrientsPer100g": { "protein": 6.666666666666667, "potassium": 333.33333333333337, "carbs": 63.333333333333336, "fiber": 6.67, "sugar": 6.666666666666667, "calories": 500.0, "phosphorus": 0.0 } },
+      { "name": "Sweet Potato Sticks", "nutrientsPer100g": { "protein": 5.0, "potassium": 500.0, "carbs": 65.0, "fiber": 3.75, "sugar": 38.75, "calories": 287.5, "phosphorus": 0.0 } },
+      { "name": "Triscuits", "nutrientsPer100g": { "protein": 10.714285714285715, "potassium": 446.42857142857144, "carbs": 71.42857142857143, "fiber": 10.714285714285715, "sugar": 8.7, "calories": 428.5714285714286, "phosphorus": 0.0 } },
+      { "name": "Wheat Thins", "nutrientsPer100g": { "protein": 6.6668, "potassium": 166.66667, "carbs": 100.0, "fiber": 3.33333, "sugar": 6.666667, "calories": 466.66667, "phosphorus": 0.0 } },
+      { "name": "Coconut Flour ", "nutrientsPer100g": { "protein": 17.8571, "potassium": 2142.857, "carbs": 64.28571, "fiber": 42.85714, "sugar": 17.85714, "calories": 428.5714, "phosphorus": 0.0 } },
+      { "name": "Cauliflower flour", "nutrientsPer100g": { "protein": 22.857142857142858, "potassium": 228.57142857142858, "carbs": 57.142857142857146, "fiber": 22.857142857142858, "sugar": 22.857142857142858, "calories": 342.8571428571429, "phosphorus": 0.0 } },
+      { "name": "Migros Granola", "nutrientsPer100g": { "protein": 11.0, "potassium": 356.0, "carbs": 51.0, "fiber": 5.0, "sugar": 13.0, "calories": 484.44, "phosphorus": 0.0 } },
+      { "name": "Protein Granola Boost", "nutrientsPer100g": { "protein": 0.0, "potassium": 550.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Nature Valley Granola bar ", "nutrientsPer100g": { "protein": 0.0, "potassium": 0.0, "carbs": 0.0, "fiber": 0.0, "sugar": 11.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Oats (Steel Cut)", "nutrientsPer100g": { "protein": 13.33333, "potassium": 491.1111, "carbs": 68.888, "fiber": 8.88889, "sugar": 0.0, "calories": 377.7778, "phosphorus": 0.0 } },
+      { "name": "Honey Graham Bliss", "nutrientsPer100g": { "protein": 0.0, "potassium": 257.57575757575756, "carbs": 0.0, "fiber": 0.0, "sugar": 33.33333333333333, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Lotus Biscuits", "nutrientsPer100g": { "protein": 6.451613, "potassium": 62.51613, "carbs": 74.19355, "fiber": 0.0, "sugar": 38.70967741935483, "calories": 483.871, "phosphorus": 0.0 } },
+      { "name": "Pretzel", "nutrientsPer100g": { "protein": 0.0, "potassium": 146.0, "carbs": 80.0, "fiber": 0.0, "sugar": 2.8, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Rice crispy Quaker", "nutrientsPer100g": { "protein": 0.0, "potassium": 0.0, "carbs": 46.66666666666667, "fiber": 0.0, "sugar": 6.666667, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Apple Danish Turnover", "nutrientsPer100g": { "protein": 0.0, "potassium": 0.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Black bean bun", "nutrientsPer100g": { "protein": 6.03, "potassium": 308.0, "carbs": 16.56, "fiber": 6.8, "sugar": 0.3, "calories": 91.0, "phosphorus": 0.0 } },
+      { "name": "Red Bean Bun ", "nutrientsPer100g": { "protein": 6.95122, "potassium": 136.8293, "carbs": 47.56098, "fiber": 2.682927, "sugar": 18.29268, "calories": 248.7805, "phosphorus": 0.0 } },
+      { "name": "Butter Cookies-Drk Choco", "nutrientsPer100g": { "protein": 0.0, "potassium": 250.0, "carbs": 69.333333, "fiber": 0.0, "sugar": 33.333333, "calories": 0.0, "phosphorus": 88.0 } },
+      { "name": "Corn Bread", "nutrientsPer100g": { "protein": 7.0, "potassium": 133.0, "carbs": 54.0, "fiber": 2.3, "sugar": 16.0, "calories": 330.0, "phosphorus": 391.0 } },
+      { "name": "Cheese Cake", "nutrientsPer100g": { "protein": 6.0, "potassium": 90.0, "carbs": 26.0, "fiber": 0.4, "sugar": 22.0, "calories": 321.0, "phosphorus": 93.0 } },
+      { "name": "Chicharon-ni Mang Juan", "nutrientsPer100g": { "protein": 0.0, "potassium": 600.0, "carbs": 54.0, "fiber": 0.0, "sugar": 4.0, "calories": 0.0, "phosphorus": 60.0 } },
+      { "name": "Chicken Pie ", "nutrientsPer100g": { "protein": 7.0, "potassium": 26.0, "carbs": 22.0, "fiber": 0.0, "sugar": 2.4, "calories": 239.0, "phosphorus": 0.0 } },
+      { "name": "Croissant", "nutrientsPer100g": { "protein": 0.0, "potassium": 118.0, "carbs": 45.8, "fiber": 0.0, "sugar": 11.26, "calories": 0.0, "phosphorus": 105.0 } },
+      { "name": "Donut-Tim Horton", "nutrientsPer100g": { "protein": 0.0, "potassium": 0.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 70.0 } },
+      { "name": "Choco or Cream filled", "nutrientsPer100g": { "protein": 0.0, "potassium": 100.0, "carbs": 0.0, "fiber": 0.0, "sugar": 14.462081128747794, "calories": 0.0, "phosphorus": 80.0 } },
+      { "name": "Englsih Muffin", "nutrientsPer100g": { "protein": 0.0, "potassium": 131.0, "carbs": 0.0, "fiber": 0.0, "sugar": 15.0, "calories": 0.0, "phosphorus": 133.0 } },
+      { "name": "French Bread/baguette", "nutrientsPer100g": { "protein": 12.0, "potassium": 128.0, "carbs": 56.0, "fiber": 0.0, "sugar": 2.6, "calories": 289.0, "phosphorus": 105.0 } },
+      { "name": "French Bread", "nutrientsPer100g": { "protein": 0.0, "potassium": 128.0, "carbs": 56.0, "fiber": 0.0, "sugar": 2.6, "calories": 0.0, "phosphorus": 105.0 } },
+      { "name": "Noodle-Edamame Organic spaghetti", "nutrientsPer100g": { "protein": 42.35294117647059, "potassium": 2235.294117647059, "carbs": 36.470588235294116, "fiber": 0.0, "sugar": 0.0, "calories": 329.4117647058824, "phosphorus": 168.0 } },
+      { "name": "Noodle-flour", "nutrientsPer100g": { "protein": 4.51, "potassium": 38.0, "carbs": 25.01, "fiber": 3.9, "sugar": 0.8, "calories": 149.0, "phosphorus": 76.0 } },
+      { "name": "Noodle-rice", "nutrientsPer100g": { "protein": 0.9, "potassium": 4.0, "carbs": 25.0, "fiber": 1.0, "sugar": 0.1, "calories": 109.0, "phosphorus": 20.0 } },
+      { "name": "Noodle-Mungbean", "nutrientsPer100g": { "protein": 0.2, "potassium": 11.76470588235294, "carbs": 84.70588235294117, "fiber": 0.0, "sugar": 0.0, "calories": 351.0, "phosphorus": 0.0 } },
+      { "name": "Original Baguette-Fresh Mkt", "nutrientsPer100g": { "protein": 9.38, "potassium": 117.1875, "carbs": 50.0, "fiber": 0.0, "sugar": 3.125, "calories": 250.0, "phosphorus": 200.0 } },
+      { "name": "Pandesal", "nutrientsPer100g": { "protein": 7.71, "potassium": 107.0, "carbs": 55.21, "fiber": 0.0, "sugar": 10.21, "calories": 307.0, "phosphorus": 36.0 } },
+      { "name": "Pizza", "nutrientsPer100g": { "protein": 0.0, "potassium": 172.0, "carbs": 30.33, "fiber": 0.0, "sugar": 1.84, "calories": 0.0, "phosphorus": 216.0 } },
+      { "name": "Potato", "nutrientsPer100g": { "protein": 0.0, "potassium": 535.0, "carbs": 21.0, "fiber": 0.0, "sugar": 1.2, "calories": 0.0, "phosphorus": 61.0 } },
+      { "name": "Portuguese Bun", "nutrientsPer100g": { "protein": 0.0, "potassium": 115.0, "carbs": 0.0, "fiber": 0.0, "sugar": 2.22, "calories": 0.0, "phosphorus": 72.0 } },
+      { "name": "Rice-White", "nutrientsPer100g": { "protein": 0.0, "potassium": 77.0, "carbs": 28.0, "fiber": 0.0, "sugar": 0.1, "calories": 0.0, "phosphorus": 33.0 } },
+      { "name": "Rice-Quinoa-Red Red", "nutrientsPer100g": { "protein": 5.0, "potassium": 283.0, "carbs": 66.66667, "fiber": 2.3, "sugar": 0.0, "calories": 143.0, "phosphorus": 0.0 } },
+      { "name": "Rice-Quinoa-White", "nutrientsPer100g": { "protein": 5.0, "potassium": 283.0, "carbs": 66.6667, "fiber": 2.3, "sugar": 0.0, "calories": 143.0, "phosphorus": 0.0 } },
+      { "name": "Quinoa Chips", "nutrientsPer100g": { "protein": 14.0, "potassium": 150.0, "carbs": 58.0, "fiber": 6.0, "sugar": 4.0, "calories": 560.0, "phosphorus": 0.0 } },
+      { "name": "Vegie Rice-Green Giant Riced Veggies", "nutrientsPer100g": { "protein": 2.352941, "potassium": 176.4706, "carbs": 8.23594, "fiber": 2.352941, "sugar": 2.32941, "calories": 58.82353, "phosphorus": 187.0 } },
+      { "name": "Rice-Sweet", "nutrientsPer100g": { "protein": 0.0, "potassium": 10.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.1, "calories": 0.0, "phosphorus": 8.0 } },
+      { "name": "Siopao", "protein": 0.0, "nutrientsPer100g": { "potassium": 294.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 105.0 } },
+      { "name": "Taro Root-Pro", "nutrientsPer100g": { "protein": 1.5, "potassium": 591.0, "carbs": 26.46, "fiber": 0.0, "sugar": 0.4, "calories": 112.0, "phosphorus": 84.0 } },
+      { "name": "Tim Horton Steak Sandwich", "nutrientsPer100g": { "protein": 0.0, "potassium": 224.13793103448273, "carbs": 0.0, "fiber": 0.0, "sugar": 3.7931034482758617, "calories": 0.0, "phosphorus": 133.0 } },
+      { "name": "Toasted Muffin", "nutrientsPer100g": { "protein": 0.0, "potassium": 131.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 127.0 } },
+      { "name": "Tortillas-Casa wheat flour tortillas Mendosa Tripple Baked", "nutrientsPer100g": { "protein": 9.375, "potassium": 261.53846153846155, "carbs": 46.875, "fiber": 0.0, "sugar": 3.125, "calories": 146.484375, "phosphorus": 135.0 } },
+      { "name": "White Bread", "nutrientsPer100g": { "protein": 0.0, "potassium": 115.0, "carbs": 0.0, "fiber": 0.0, "sugar": 5.0, "calories": 0.0, "phosphorus": 103.0 } },
+      { "name": "Wheat Bread (Great Value)", "nutrientsPer100g": { "protein": 11.67, "potassium": 208.33, "carbs": 41.67, "fiber": 0.0, "sugar": 5.0, "calories": 233.33, "phosphorus": 212.0 } },
+      { "name": "Angel Food Cake ", "nutrientsPer100g": { "protein": 0.0, "potassium": 88.88888, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Banana Loaf Cake (Fresh Mkt)", "nutrientsPer100g": { "protein": 0.0, "potassium": 166.66666666666669, "carbs": 53.333333333333336, "fiber": 0.0, "sugar": 28.88888888888889, "calories": 0.0, "phosphorus": 58.0 } },
+      { "name": "Mapple Cream Muffin", "nutrientsPer100g": { "protein": 0.0, "potassium": 100.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 2.0 } },
+      { "name": "Briole a la Creme ", "nutrientsPer100g": { "protein": 0.0, "potassium": 133.928571, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Butter Cake", "nutrientsPer100g": { "protein": 0.0, "potassium": 119.0, "carbs": 0.0, "fiber": 0.0, "sugar": 46.86, "calories": 0.0, "phosphorus": 85.0 } },
+      { "name": "Pound Cake", "nutrientsPer100g": { "protein": 6.0, "potassium": 119.0, "carbs": 49.0, "fiber": 0.5, "sugar": 34.0, "calories": 388.0, "phosphorus": 146.0 } },
+      { "name": "Turnover-Cream Blueberry Danish", "nutrientsPer100g": { "protein": 0.0, "potassium": 85.1063829787234, "carbs": 36.170212765957444, "fiber": 0.0, "sugar": 12.76595744680851, "calories": 0.0, } },
+      { "name": "Turnover-Blackberry", "nutrientsPer100g": { "protein": 0.0, "potassium": 44.24778761061947, "carbs": 53.982300884955755, "fiber": 0.0, "sugar": 27.433628318584073, "calories": 0.0, "phosphorus": 22.0 } },
+      { "name": "Blueberry Muffin", "nutrientsPer100g": { "protein": 0.0, "potassium": 70.1754, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 146.0 } },
+      { "name": "Muffin-Cranberry-Lemon", "nutrientsPer100g": { "protein": 0.0, "potassium": 75.0, "carbs": 0.0, "fiber": 0.0, "sugar": 27.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Orange Muffin", "nutrientsPer100g": { "protein": 0.0, "potassium": 80.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 408.0 } },
+      { "name": "Double Chocolate Muffin", "nutrientsPer100g": { "protein": 0.0, "potassium": 400.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 795.0 } },
+      { "name": "Dark Chocolate Cookie McDonald", "nutrientsPer100g": { "protein": 0.0, "potassium": 241.67, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 49.0 } },
+      { "name": "Oatmeal chocolate cookie", "nutrientsPer100g": { "protein": 0.0, "potassium": 320.51282051282055, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 111.0 } },
+      { "name": "Madeleines Soft and Moist Cookiies", "nutrientsPer100g": { "protein": 0.0, "potassium": 71.43, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 470.0 } },
+      { "name": "Donsuemor 1pc=28 grams=19 mgs", "nutrientsPer100g": { "protein": 0.0, "potassium": 67.857, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 0.0 } },
+      { "name": "Rice crackers 30gm=10", "nutrientsPer100g": { "Protein": 0, "Potassium": 0, "Carbs": 10, "Fiber": 3, "Sugar": 3, "Calories": 3, "Phosphorus": 3 } },
+      { "name": "Blueberry Fritters 7-11", "nutrientsPer100g": { "Protein": 0, "potassium": 77.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 73.0 } },
+      { "name": "Apple Fritters 7-11", "nutrientsPer100g": { "protein": 0.0, "potassium": 145.0, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 73.0 } },
+      { "name": "Cranberry  Lemon Compliments brand", "nutrientsPer100g": { "protein": 5.0, "potassium": 75.0, "carbs": 48.0, "fiber": 0.0, "sugar": 27.0, "calories": 370.0, "phosphorus": 0.0 } },
+      { "name": "Raisin Bran Compliments brand", "nutrientsPer100g": { "protein": 6.0, "potassium": 400.0, "carbs": 56.0, "fiber": 0.0, "sugar": 35.0, "calories": 400.0, "phosphorus": 80.85 } },
+      { "name": "Fudge Brownies-Farmer's Mkt", "nutrientsPer100g": { "protein": 6.0, "potassium": 400.0, "carbs": 56.0, "fiber": 0.0, "sugar": 35.0, "calories": 400.0, "phosphorus": 80.85 } },
+      { "name": "Fudge Brownies-Farmer's Mkt", "nutrientsPer100g": { "protein": 6.060606, "potassium": 227.2727, "carbs": 54.54545, "fiber": 3.030303, "sugar": 36.36364, "calories": 454.5455, "phosphorus": 0.0 } },
+      { "name": "Almond  Milk Choco-President's Choice", "nutrientsPer100g": { "protein": 8.0, "potassium": 400.0, "carbs": 56.0, "fiber": 4.0, "sugar": 48.0, "calories": 100.0, "phosphorus": 0.0 } },
+      { "name": "Baklava with Hellenic Pistachios", "nutrientsPer100g": { "protein": 0.0, "potassium": 130.77, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 109.5 } },
+      { "name": "Barquillos", "nutrientsPer100g": { "protein": 0.0, "potassium": 193.75, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 531.5 } },
+      { "name": "Almond  Milk Choco-President's Choice", "nutrientsPer100g": { "protein": 8.0, "potassium": 400.0, "carbs": 56.0, "fiber": 4.0, "sugar": 48.0, "calories": 100.0, "phosphorus": 0.0 } },
+      { "name": "Baklava with Hellenic Pistachios", "nutrientsPer100g": { "protein": 0.0, "potassium": 130.77, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 109.5 } },
+      { "name": "Barquillos", "nutrientsPer100g": { "protein": 0.0, "potassium": 193.75, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 531.5 } },
+      { "name": "Fudge Brownies-Farmer's Mkt", "nutrientsPer100g": { "protein": 6.060606, "potassium": 227.2727, "carbs": 54.54545, "fiber": 3.030303, "sugar": 36.36364, "calories": 454.5455, "phosphorus": 0.0 } },
+      { "name": "Almond  Milk Choco-President's Choice", "nutrientsPer100g": { "protein": 8.0, "potassium": 400.0, "carbs": 56.0, "fiber": 4.0, "sugar": 48.0, "calories": 100.0, "phosphorus": 0.0 } },
+      { "name": "Baklava with Hellenic Pistachios", "nutrientsPer100g": { "protein": 0.0, "potassium": 130.77, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 109.5 } },
+      { "name": "Barquillos", "protein": 0.0, "nutrientsPer100g": { "potassium": 193.75, "carbs": 0.0, "fiber": 0.0, "sugar": 0.0, "calories": 0.0, "phosphorus": 531.5 } },
+      { "name": "Basmati Rice White", "nutrientsPer100g": { "Protein": 7, "Potassium": 26, "Carbs": 71, "Fiber": 2, "Sugar": 0, "Calories": 354, "Phosphorus": 0 } },
+      { "name": "Brown Rice", "nutrientsPer100g": { "Protein": 7.5, "Potassium": 160, "Carbs": 76, "Fiber": 4.7, "Sugar": 0, "Calories": 360, "Phosphorus": 150 } },
+      { "name": "Batangas Tablea", "nutrientsPer100g": { "Protein": 6.0, "Potassium": 500.0, "Carbs": 40.0, "Fiber": 12.5, "Sugar": 16.0, "Calories": 626.67, "Phosphorus": 81.0 } },
+      { "name": "Belgian Dark Choco", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 600.0, "Carbs": 32.5, "Fiber": 12.5, "Sugar": 16.0, "Calories": 0.0, "Phosphorus": 75.0 } },
+      { "name": "Choclte Bark-(Bulk Barn)", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 437.5, "Carbs": 50.0, "Fiber": 0.0, "Sugar": 37.5, "Calories": 0.0, "Phosphorus": 350.0 } },
+      { "name": "Double Dark Chocolate Compliments brand", "nutrientsPer100g": { "Protein": 6.0, "Potassium": 350.0, "Carbs": 50.0, "Fiber": 0.0, "Sugar": 28.0, "Calories": 320.0, "Phosphorus": 56.3 } },
+      { "name": "Guide's Chocolate Cookies", "nutrientsPer100g": { "Protein": 4.3478260869565215, "Potassium": 217.39130434782606, "Carbs": 945.1795841, "Fiber": 4.3478260869565215, "Sugar": 43.47826086956522, "Calories": 652.1739130434783, "Phosphorus": 520.5 } },
+      { "name": "Guide's Vanills Cookies", "nutrientsPer100g": { "Protein": 4.3478260869565215, "Potassium": 86.95652173913044, "Carbs": 91.30434782608695, "Fiber": 0.0, "Sugar": 43.47826086956522, "Calories": 608.695652173913, "Phosphorus": 283.0 } },
+      { "name": "Jacaquote", "nutrientsPer100g": { "Protein": 10.0, "Potassium": 312.5, "Carbs": 45.0, "Fiber": 12.5, "Sugar": 27.5, "Calories": 600.0, "Phosphorus": 0.0 } },
+      { "name": "Lacey's-Macademia and Milk Choco", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 368.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Pres Choice Milk chocolate Crepes", "nutrientsPer100g": { "Protein": 6.67, "Potassium": 250.0, "Carbs": 73.33, "Fiber": 0.0, "Sugar": 46.67, "Calories": 500.0, "Phosphorus": 0.0 } },
+      { "name": "Pecan choco", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 350.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Pecan pie", "nutrientsPer100g": { "Protein": 3.1914893617021276, "Potassium": 79.7872340425532, "Carbs": 53.191489361702125, "Fiber": 3.1914893617021276, "Sugar": 20.21276595744681, "Calories": 425.531914893617, "Phosphorus": 0.0 } },
+      { "name": "Lindt - La mousse choco", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 1071.88, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Lindt - dark chocolate ", "nutrientsPer100g": { "Protein": 12.1, "Potassium": 1384.8484848484848, "Carbs": 8.9, "Fiber": 3.0, "Sugar": 9.0, "Calories": 582.0, "Phosphorus": 0.0 } },
+      { "name": "Godiva", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 617.6470588235295, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Caramelized Almonds", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 658.2938388625593, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Almond Roca", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 85.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 16.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Chocolate-Bark Thins snacking chocolates", "nutrientsPer100g": { "Protein": 9.677419, "Potassium": 451.6129, "Carbs": 48.3871, "Fiber": 9.677419, "Sugar": 35.48387, "Calories": 516.129, "Phosphorus": 0.0 } },
+      { "name": "Abalone", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 448.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 217.0 } },
+      { "name": "Bangus Belly", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 200.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 250.0 } },
+      { "name": "Bangus", "nutrientsPer100g": { "Protein": 20.53, "Potassium": 291.7647058823529, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 148.0, "Phosphorus": 250.0 } },
+      { "name": "Calamares", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 279.0, "Carbs": 8.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 615.0 } },
+      { "name": "Clams", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 628.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 440.0 } },
+      { "name": "Cod ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 452.173913, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Smoked Cod ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 452.17, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Cod liver", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 50.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Halibut", "nutrientsPer100g": { "Protein": 21.5, "Potassium": 528.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 111.0, "Phosphorus": 200.0 } },
+      { "name": "Lobster", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 247.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 200.0 } },
+      { "name": "Mussels", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 573.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 225.0 } },
+      { "name": "Oyster", "nutrientsPer100g": { "Protein": 9.0, "Potassium": 244.0, "Carbs": 12.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 163.0, "Phosphorus": 190.0 } },
+      { "name": "Pompano", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 350.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 250.0 } },
+      { "name": "Salmon", "nutrientsPer100g": { "Protein": 20.0, "Potassium": 384.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 208.0, "Phosphorus": 230.0 } },
+      { "name": "Sardines-dried tuyo", "nutrientsPer100g": { "Protein": 14.545454545454545, "Potassium": 378.1818181818182, "Carbs": 3.6363636363636362, "Fiber": 0.0, "Sugar": 0.0, "Calories": 163.63636363636363, "Phosphorus": 150.0 } },
+      { "name": "Scallops", "nutrientsPer100g": { "Protein": 18.14, "Potassium": 367.0, "Carbs": 10.49, "Fiber": 0.0, "Sugar": 0.82, "Calories": 217.0, "Phosphorus": 157.5 } },
+      { "name": "Seabass", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 324.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 250.0 } },
+      { "name": "Seaweeds", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 1125.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 70.0 } },
+      { "name": "Seaweed 5-Gram Paldo Roasted ", "nutrientsPer100g": { "Protein": 80.0, "Potassium": 89.0, "Carbs": 40.0, "Fiber": 40.0, "Sugar": 0.0, "Calories": 600.0, "Phosphorus": 0.0 } },
+      { "name": "Seaweed  Roasted-Kirkland ", "nutrientsPer100g": { "Protein": 17.647058823529413, "Potassium": 882.352941, "Carbs": 23.529411764705884, "Fiber": 1.0, "Sugar": 0.0, "Calories": 588.2352941176471, "Phosphorus": 0.0 } },
+      { "name": "Kim-Nori Seasoned Seaweed ", "nutrientsPer100g": { "Protein": 25.0, "Potassium": 2000.0, "Carbs": 25.0, "Fiber": 25.0, "Sugar": 0.0, "Calories": 500.0, "Phosphorus": 0.0 } },
+      { "name": "Seaweeds - pickled", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 0.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Shrimp - Siomai", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 259.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 350.0 } },
+      { "name": "Shrimp", "nutrientsPer100g": { "Protein": 24.0, "Potassium": 259.0, "Carbs": 0.2, "Fiber": 1.2, "Sugar": 1.0, "Calories": 99.0, "Phosphorus": 191.0 } },
+      { "name": "Shrimp - Tempura ", "nutrientsPer100g": { "Protein": 18.21, "Potassium": 173.0, "Carbs": 10.36, "Fiber": 0.0, "Sugar": 0.48, "Calories": 145.0, "Phosphorus": 0.0 } },
+      { "name": "Sole Fish", "nutrientsPer100g": { "Protein": 19.0, "Potassium": 361.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 91.0, "Phosphorus": 250.0 } },
+      { "name": "Trout-Lake", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 476.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Tuna (skipjack)", "nutrientsPer100g": { "Protein": 28.0, "Potassium": 522.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 132.0, "Phosphorus": 250.0 } },
+      { "name": "Tuna (Yellowfin)", "nutrientsPer100g": { "Protein": 29.0, "Potassium": 527.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 130.0, "Phosphorus": 300.0 } },
+      { "name": "Tuyo ", "nutrientsPer100g": { "Protein": 19.8, "Potassium": 627.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 129.0, "Phosphorus": 0.0 } },
+      { "name": "Apple- Green", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 107.0, "Carbs": 13.81, "Fiber": 0.0, "Sugar": 10.39, "Calories": 0.0, "Phosphorus": 10.0 } },
+      { "name": "Apple- red", "nutrientsPer100g": { "Protein": 0.3, "Potassium": 100.0, "Carbs": 13.8, "Fiber": 2.22727, "Sugar": 10.0909, "Calories": 56.81818181818181, "Phosphorus": 9.0 } },
+      { "name": "Apple-Dried", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 715.7931034482758, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 69.0, "Calories": 0.0, "Phosphorus": 15.0 } },
+      { "name": "Apricot", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 259.0, "Carbs": 11.12, "Fiber": 0.0, "Sugar": 9.0, "Calories": 0.0, "Phosphorus": 15.0 } },
+      { "name": "Avocado", "nutrientsPer100g": { "Protein": 2.0, "Potassium": 485.0, "Carbs": 8.5, "Fiber": 1.5, "Sugar": 0.66, "Calories": 160.0, "Phosphorus": 52.0 } },
+      { "name": "Banana-Saba", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 560.0, "Carbs": 33.3325, "Fiber": 0.0, "Sugar": 18.0, "Calories": 0.0, "Phosphorus": 60.0 } },
+      { "name": "Blackberries", "nutrientsPer100g": { "Protein": 1.4, "Potassium": 162.0, "Carbs": 9.6, "Fiber": 5.0, "Sugar": 4.9, "Calories": 43.0, "Phosphorus": 0.0 } },
+      { "name": "Blueberries", "nutrientsPer100g": { "Protein": 0.9, "Potassium": 50.0, "Carbs": 9.1, "Fiber": 1.5, "Sugar": 9.1, "Calories": 56.25, "Phosphorus": 0.0 } },
+      { "name": "Cantaloupe", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 267.0, "Carbs": 8.2, "Fiber": 0.0, "Sugar": 8.0, "Calories": 0.0, "Phosphorus": 17.0 } },
+      { "name": "Cassava", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 271.0, "Carbs": 38.0, "Fiber": 0.0, "Sugar": 1.7, "Calories": 0.0, "Phosphorus": 39.0 } },
+      { "name": "Cherry", "nutrientsPer100g": { "Protein": 1.0, "Potassium": 222.0, "Carbs": 12.0, "Fiber": 1.6, "Sugar": 12.8, "Calories": 63.0, "Phosphorus": 23.0 } },
+      { "name": "Cranberry Fresh", "nutrientsPer100g": { "Protein": 0.39, "Potassium": 85.0, "Carbs": 12.2, "Fiber": 0.0, "Sugar": 4.0, "Calories": 46.0, "Phosphorus": 3.0 } },
+      { "name": "Cranberry Sauce", "nutrientsPer100g": { "Protein": 0.2, "Potassium": 26.0, "Carbs": 38.9, "Fiber": 0.0, "Sugar": 38.0, "Calories": 151.0, "Phosphorus": 42.5 } },
+      { "name": "Date-Compass dried", "nutrientsPer100g": { "Protein": 2.5, "Potassium": 656.0, "Carbs": 77.5, "Fiber": 0.0, "Sugar": 63.0, "Calories": 300.0, "Phosphorus": 70.0 } },
+      { "name": "Honey dew", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 228.0, "Carbs": 9.1, "Fiber": 0.0, "Sugar": 8.0, "Calories": 0.0, "Phosphorus": 17.7 } },
+      { "name": "Kiwi fruit", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 312.0, "Carbs": 15.0, "Fiber": 0.0, "Sugar": 9.0, "Calories": 0.0, "Phosphorus": 25.0 } },
+      { "name": "Lemon ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 138.0, "Carbs": 8.63, "Fiber": 0.0, "Sugar": 2.5, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Mango-Dried", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 279.0, "Carbs": 77.5, "Fiber": 0.0, "Sugar": 27.0, "Calories": 0.0, "Phosphorus": 45.0 } },
+      { "name": "Mango-Fresh", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 168.0, "Carbs": 15.0, "Fiber": 0.0, "Sugar": 14.0, "Calories": 0.0, "Phosphorus": 20.0 } },
+      { "name": "Nectarin", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 140.0, "Carbs": 11.0, "Fiber": 0.0, "Sugar": 8.0, "Calories": 0.0, "Phosphorus": 26.0 } },
+      { "name": "Oranges (fresh)", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 166.0, "Carbs": 13.0, "Fiber": 0.0, "Sugar": 9.0, "Calories": 49.0, "Phosphorus": 0.0 } },
+      { "name": "Papaya green", "nutrientsPer100g": { "Protein": 1.3, "Potassium": 182.0, "Carbs": 11.0, "Fiber": 2.6, "Sugar": 7.8, "Calories": 98.0, "Phosphorus": 75.0 } },
+      { "name": "Papaya", "nutrientsPer100g": { "Protein": 0.6, "Potassium": 182.0, "Carbs": 11.0, "Fiber": 2.6, "Sugar": 7.586206896551724, "Calories": 32.0, "Phosphorus": 75.0 } },
+      { "name": "Peaches", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 190.0, "Carbs": 9.54, "Fiber": 0.0, "Sugar": 8.1, "Calories": 0.0, "Phosphorus": 22.0 } },
+      { "name": "Pears", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 190.0, "Carbs": 15.54, "Fiber": 0.0, "Sugar": 9.662921348314606, "Calories": 0.0, "Phosphorus": 10.0 } },
+      { "name": "Perssimon", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 310.0, "Carbs": 18.55, "Fiber": 0.0, "Sugar": 13.0, "Calories": 0.0, "Phosphorus": 52.08 } },
+      { "name": "Pineapple", "nutrientsPer100g": { "Protein": 0.5, "Potassium": 109.0, "Carbs": 12.63, "Fiber": 0.0, "Sugar": 10.052910052910052, "Calories": 50.0, "Phosphorus": 5.0 } },
+      { "name": "Plums", "nutrientsPer100g": { "Protein": 0.7, "Potassium": 157.0, "Carbs": 11.42, "Fiber": 0.0, "Sugar": 9.92, "Calories": 46.0, "Phosphorus": 7.0 } },
+      { "name": "Prunes-dried", "nutrientsPer100g": { "Protein": 2.18, "Potassium": 745.0, "Carbs": 63.88, "Fiber": 7.0, "Sugar": 38.13, "Calories": 240.0, "Phosphorus": 75.0 } },
+      { "name": "Rasberry", "nutrientsPer100g": { "Protein": 2.0, "Potassium": 151.0, "Carbs": 12.0, "Fiber": 6.5040465, "Sugar": 4.4, "Calories": 52.0, "Phosphorus": 27.0 } },
+      { "name": "Strawberry", "nutrientsPer100g": { "Protein": 0.7, "Potassium": 254.0, "Carbs": 7.7, "Fiber": 2.0, "Sugar": 4.9, "Calories": 32.0, "Phosphorus": 23.0 } },
+      { "name": "Watermellon", "nutrientsPer100g": { "Protein": 0.6, "Potassium": 127.5, "Carbs": 7.55, "Fiber": 0.0, "Sugar": 6.2, "Calories": 30.0, "Phosphorus": 10.0 } },
+      { "name": "Beef (sirloin)", "nutrientsPer100g": { "Protein": 20.3, "Potassium": 315.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 201.0, "Phosphorus": 380.0 } },
+      { "name": "Beef- Pres Choice sirloin strips", "nutrientsPer100g": { "Protein": 23.0, "Potassium": 400.0, "Carbs": 2.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 200.0, "Phosphorus": 400.0 } },
+      { "name": "Beek -fillet mignon", "nutrientsPer100g": { "Protein": 26.0, "Potassium": 329.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 167.0, "Phosphorus": 375.0 } },
+      { "name": "Chicharon", "nutrientsPer100g": { "Protein": 64.29, "Potassium": 127.0, "Carbs": 0.0, "Fiber": 14.29, "Sugar": 0.0, "Calories": 571.43, "Phosphorus": 0.0 } },
+      { "name": "Italian Meatballs", "nutrientsPer100g": { "Protein": 15.0, "Potassium": 208.33333333333334, "Carbs": 3.3333333333333335, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Roast Beef", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 647.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 151.0 } },
+      { "name": "Chicken and Beef Meatball ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 237.47, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Tendon", "nutrientsPer100g": { "Protein": 34.6, "Potassium": 149.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 146.0, "Phosphorus": 125.0 } },
+      { "name": "Burger King ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 217.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Uncle Burger-A&W", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 124.63, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 2.985074626865672, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Ground Beef", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 302.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 144.0 } },
+      { "name": "Maple Leaf Sausage ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 342.028986, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Beef Sausage ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 190.612777, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Pork ", "nutrientsPer100g": { "Protein": 21.16402, "Potassium": 0.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 155.2028, "Phosphorus": 0.0 } },
+      { "name": "Ham", "nutrientsPer100g": { "Protein": 16.6, "Potassium": 287.0, "Carbs": 1.5, "Fiber": 1.3, "Sugar": 0.0, "Calories": 163.0, "Phosphorus": 261.0 } },
+      { "name": "Spam", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 409.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 126.0 } },
+      { "name": "Tim Hortons Steak and Egg Sndwch", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 92.4, "Carbs": 14.0, "Fiber": 0.0, "Sugar": 5.0, "Calories": 0.0, "Phosphorus": 447 } },
+      { "name": "Almond", "nutrientsPer100g": { "Protein": 21.15, "Potassium": 733.0, "Carbs": 21.44, "Fiber": 12.5, "Sugar": 4.35, "Calories": 576.0, "Phosphorus": 503.0 } },
+      { "name": "Walnut", "nutrientsPer100g": { "Protein": 16.0, "Potassium": 250.0, "Carbs": 6.16, "Fiber": 6.7, "Sugar": 2.0, "Calories": 660.0, "Phosphorus": 98.07 } },
+      { "name": "Peanut butter-Compliments", "nutrientsPer100g": { "Protein": 26.66667, "Potassium": 666.6667, "Carbs": 20.0, "Fiber": 6.66667, "Sugar": 6.66667, "Calories": 600.0, "Phosphorus": 120.0 } },
+      { "name": "Pistacchio", "nutrientsPer100g": { "Protein": 10.0, "Potassium": 1025.0, "Carbs": 20.0, "Fiber": 10.0, "Sugar": 8.0, "Calories": 562.0, "Phosphorus": 500.0 } },
+      { "name": "Cashew-raw  ", "nutrientsPer100g": { "Protein": 17.5, "Potassium": 624.0, "Carbs": 30.0, "Fiber": 3.3, "Sugar": 5.0, "Calories": 550.0, "Phosphorus": 0.0 } },
+      { "name": "Chestnut", "nutrientsPer100g": { "Protein": 3.33, "Potassium": 715.0, "Carbs": 46.66666666666667, "Fiber": 0.0, "Sugar": 11.0, "Calories": 90.9090909090909, "Phosphorus": 140.0 } },
+      { "name": "Eggs Whole", "nutrientsPer100g": { "Protein": 13.0, "Potassium": 134.0, "Carbs": 60.0, "Fiber": 0.0, "Sugar": 0.77, "Calories": 143.0, "Phosphorus": 184.0 } },
+      { "name": "Egg White", "nutrientsPer100g": { "Protein": 11.0, "Potassium": 163.0, "Carbs": 0.6060606060606061, "Fiber": 0.0, "Sugar": 0.7, "Calories": 52.0, "Phosphorus": 33.0 } },
+      { "name": "Duck Egg", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 225.0, "Carbs": 1.44, "Fiber": 0.0, "Sugar": 0.93, "Calories": 0.0, "Phosphorus": 402.0 } },
+      { "name": "Chicken breast", "nutrientsPer100g": { "Protein": 31.0, "Potassium": 256.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 165.0, "Phosphorus": 215.0 } },
+      { "name": "Chicken liver", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 263.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 250.0 } },
+      { "name": "Chicken Feet", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 31.0, "Carbs": 0.2, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 166.0 } },
+      { "name": "Chicken sausage", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 232.0, "Carbs": 1.52, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 175.0 } },
+      { "name": "Turkey Sausage", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 249.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 178.0 } },
+      { "name": "Turkey sausage", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 262.0, "Carbs": 0.47, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 178.0 } },
+      { "name": "Turkey (Smoked)", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 298.0599647266314, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 170.0 } },
+      { "name": "Turkey (Cooked)", "nutrientsPer100g": { "Protein": 30.6, "Potassium": 292.0, "Carbs": 0.1, "Fiber": 0.0, "Sugar": 0.0, "Calories": 565.0, "Phosphorus": 450.0 } },
+      { "name": "Turkey (Roasted)", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 239.0, "Carbs": 0.1, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 200.0 } },
+      { "name": "Turkey-6\" Subway", "nutrientsPer100g": { "Protein": 16.0, "Potassium": 245.5, "Carbs": 47.0, "Fiber": 0.0, "Sugar": 8.0, "Calories": 290.0, "Phosphorus": 0.0 } },
+      { "name": "Agar agar ", "nutrientsPer100g": { "Protein": 0.5, "Potassium": 226.0, "Carbs": 7.0, "Fiber": 0.5, "Sugar": 0.3, "Calories": 26.0, "Phosphorus": 0.0 } },
+      { "name": "Asparagus", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 209.0, "Carbs": 3.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 94.0 } },
+      { "name": "Artichoke", "nutrientsPer100g": { "Protein": 2.9, "Potassium": 286.0, "Carbs": 12.0, "Fiber": 5.4, "Sugar": 1.0, "Calories": 53.0, "Phosphorus": 90.0 } },
+      { "name": "Avocado", "nutrientsPer100g": { "Protein": 2.0, "Potassium": 485.0, "Carbs": 8.5, "Fiber": 0.0, "Sugar": 0.7, "Calories": 160.0, "Phosphorus": 52.0 } },
+      { "name": "Bean curd roll", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 120.16129032258064, "Carbs": 0.8064516129032258, "Fiber": 0.0, "Sugar": 0.6854838709677419, "Calories": 0.0, "Phosphorus": 300.0 } },
+      { "name": "Beetroot", "nutrientsPer100g": { "Protein": 1.6102941176470589, "Potassium": 325.0, "Carbs": 9.558823529411764, "Fiber": 3.0, "Sugar": 6.8, "Calories": 43.0, "Phosphorus": 45.0 } },
+      { "name": "Bean burrito-taco bell", "nutrientsPer100g": { "Protein": 7.0, "Potassium": 301.0, "Carbs": 31.0, "Fiber": 4.2, "Sugar": 1.69, "Calories": 206.0, "Phosphorus": 163.0 } },
+      { "name": "Bitter Melon/Gourd-cooked", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 306.0, "Carbs": 4.21, "Fiber": 0.0, "Sugar": 1.87, "Calories": 0.0, "Phosphorus": 36.0 } },
+      { "name": "Bokchoy", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 252.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 1.18, "Calories": 0.0, "Phosphorus": 29.0 } },
+      { "name": "Brocolli", "nutrientsPer100g": { "Protein": 2.4, "Potassium": 293.0, "Carbs": 7.2, "Fiber": 2.6, "Sugar": 1.7, "Calories": 35.0, "Phosphorus": 66.0 } },
+      { "name": "Brussels Sprouts", "nutrientsPer100g": { "Protein": 3.4, "Potassium": 317.0, "Carbs": 7.1, "Fiber": 2.6, "Sugar": 1.7, "Calories": 43.0, "Phosphorus": 79.0 } },
+      { "name": "Carrots", "nutrientsPer100g": { "Protein": 0.341, "Potassium": 320.0, "Carbs": 8.2, "Fiber": 2.8, "Sugar": 4.7, "Calories": 41.0, "Phosphorus": 40.0 } },
+      { "name": "Cilantro", "nutrientsPer100g": { "Protein": 2.13, "Potassium": 521.0, "Carbs": 3.67, "Fiber": 0.0, "Sugar": 0.87, "Calories": 23.0, "Phosphorus": 48.0 } },
+      { "name": "Celery", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 263.0, "Carbs": 3.0, "Fiber": 0.0, "Sugar": 1.0, "Calories": 0.0, "Phosphorus": 22.0 } },
+      { "name": "Capsicum (chili pepper)", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 322.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 27.0 } },
+      { "name": "Cauliflower", "nutrientsPer100g": { "Protein": 1.9, "Potassium": 299.0, "Carbs": 5.0, "Fiber": 2.0, "Sugar": 1.9, "Calories": 25.0, "Phosphorus": 40.0 } },
+      { "name": "Chicaron ni Mng Juan", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 500.0, "Carbs": 58.0, "Fiber": 0.0, "Sugar": 4.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Cucumber", "nutrientsPer100g": { "Protein": 3.0, "Potassium": 147.0, "Carbs": 3.6, "Fiber": 0.67, "Sugar": 1.7, "Calories": 15.0, "Phosphorus": 23.0 } },
+      { "name": "Chayote-Vegetable Pear", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 125.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 16.0 } },
+      { "name": "Corn-Yellow on a cob", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 294.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 250.0 } },
+      { "name": "Dumpling (Vegetable) ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 100.0070922, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Eggplant", "nutrientsPer100g": { "Protein": 1.0, "Potassium": 229.0, "Carbs": 6.0, "Fiber": 0.0, "Sugar": 3.5, "Calories": 25.0, "Phosphorus": 23.0 } },
+      { "name": "Gai-lan chinese brocolli", "nutrientsPer100g": { "Protein": 1.2, "Potassium": 261.0, "Carbs": 1.4, "Fiber": 2.6, "Sugar": 0.8, "Calories": 26.0, "Phosphorus": 60.0 } },
+      { "name": "Ginger root", "nutrientsPer100g": { "Protein": 1.82, "Potassium": 415.0, "Carbs": 17.77, "Fiber": 0.0, "Sugar": 1.7, "Calories": 80.0, "Phosphorus": 30.0 } },
+      { "name": "Lantana-Avocado", "nutrientsPer100g": { "Protein": 6.67, "Potassium": 250.0, "Carbs": 16.67, "Fiber": 3.33, "Sugar": 3.33, "Calories": 266.67, "Phosphorus": 29.0 } },
+      { "name": "Humus-Lantana", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 0.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Humus-Spinach-Fresh Mkt/tbps", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 40.0, "Carbs": 2.0, "Fiber": 0.0, "Sugar": 1.0, "Calories": 212.12121212121212, "Phosphorus": 0.0 } },
+      { "name": "Humus-Roasted garlic-2Tbsp", "nutrientsPer100g": { "Protein": 6.666666666666667, "Potassium": 166.66666666666669, "Carbs": 10.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 233.33333333333334, "Phosphorus": 0.0 } },
+      { "name": "Dumpling (Vegetable) ", "nutrientsPer100g": { "Protein": 2.0, "Potassium": 248.0, "Carbs": 8.0, "Fiber": 0.0, "Sugar": 3.571428571, "Calories": 45.0, "Phosphorus": 0.0 } },
+      { "name": "Jute leaves (Saluyot)", "nutrientsPer100g": { "Protein": 3.5714285714285716, "Potassium": 560.7142857142858, "Carbs": 7.142857142857143, "Fiber": 0.0, "Sugar": 5.714285714285715, "Calories": 34.0, "Phosphorus": 80.0 } },
+      { "name": "Kabocha Squash", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 350.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 50.0 } },
+      { "name": "Leek", "nutrientsPer100g": { "Protein": 1.5, "Potassium": 180.0, "Carbs": 14.5, "Fiber": 1.8, "Sugar": 3.9, "Calories": 61.0, "Phosphorus": 45.0 } },
+      { "name": "Moringa leaves", "nutrientsPer100g": { "Protein": 8.1, "Potassium": 337.0, "Carbs": 9.1, "Fiber": 0.0, "Sugar": 0.0, "Calories": 64.0, "Phosphorus": 112.0 } },
+      { "name": "Moringa powder", "nutrientsPer100g": { "Protein": 27.0, "Potassium": 1324.0, "Carbs": 38.2, "Fiber": 0.0, "Sugar": 12.5, "Calories": 320.0, "Phosphorus": 300.0 } },
+      { "name": "Mushroom (white)", "nutrientsPer100g": { "Protein": 2.2, "Potassium": 356.0, "Carbs": 5.3, "Fiber": 0.0, "Sugar": 2.3, "Calories": 28.0, "Phosphorus": 93.0 } },
+      { "name": "Mushroom (brown)", "nutrientsPer100g": { "Protein": 2.5, "Potassium": 448.0, "Carbs": 4.5, "Fiber": 1.0, "Sugar": 1.72, "Calories": 22.0, "Phosphorus": 0.0 } },
+      { "name": "Okra", "nutrientsPer100g": { "Protein": 1.9, "Potassium": 135.0, "Carbs": 7.5, "Fiber": 0.0, "Sugar": 2.4, "Calories": 22.0, "Phosphorus": 0.0 } },
+      { "name": "Onion", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 146.0, "Carbs": 9.3, "Fiber": 0.0, "Sugar": 4.2, "Calories": 40.0, "Phosphorus": 29.0 } },
+      { "name": "Oregano", "nutrientsPer100g": { "Protein": 11.0, "Potassium": 1669.0, "Carbs": 64.43, "Fiber": 42.8, "Sugar": 4.09, "Calories": 306.0, "Phosphorus": 148.0 } },
+      { "name": "Parsley", "nutrientsPer100g": { "Protein": 3.0, "Potassium": 554.0, "Carbs": 7.2, "Fiber": 3.3, "Sugar": 0.85, "Calories": 36.0, "Phosphorus": 0.0 } },
+      { "name": "Peas and Carrots", "nutrientsPer100g": { "Protein": 3.5294117647058822, "Potassium": 147.05882352941177, "Carbs": 11.764705882352942, "Fiber": 0.0, "Sugar": 4.705882352941177, "Calories": 52.94117647058824, "Phosphorus": 0.0 } },
+      { "name": "Peas-Green", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 271.0, "Carbs": 16.0, "Fiber": 5.0, "Sugar": 6.0, "Calories": 81.0, "Phosphorus": 78.0 } },
+      { "name": "Pea Tips", "nutrientsPer100g": { "Protein": 4.1, "Potassium": 350.0, "Carbs": 4.0, "Fiber": 0.0, "Sugar": 3.3, "Calories": 27.0, "Phosphorus": 40.0 } },
+      { "name": "Pepper Leaves", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 175.0, "Carbs": 4.6, "Fiber": 0.0, "Sugar": 2.4, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Potato", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 535.0, "Carbs": 21.0, "Fiber": 0.0, "Sugar": 1.2, "Calories": 0.0, "Phosphorus": 61.0 } },
+      { "name": "Sweet Potato-Camote", "nutrientsPer100g": { "Protein": 1.6, "Potassium": 475.0, "Carbs": 21.0, "Fiber": 0.0, "Sugar": 6.5, "Calories": 86.0, "Phosphorus": 0.0 } },
+      { "name": "Pepper-Green-Bell cooked", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 152.72, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 17.0 } },
+      { "name": "Pepper-Green-Bell raw", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 305.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 17.0 } },
+      { "name": "Pepper-Red-Bell cooked", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 160.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 27.0 } },
+      { "name": "Pepper-Red-Bell raw", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 322.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 27.0 } },
+      { "name": "Pepper-Yellow-Bell cooked", "nutrientsPer100g": { "Protein": 1.0, "Potassium": 212.0, "Carbs": 6.32, "Fiber": 2.1, "Sugar": 4.2, "Calories": 27.0, "Phosphorus": 25.0 } },
+      { "name": "Pepper-Yellow-Bell raw", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 394.3, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 25.0 } },
+      { "name": "Popcorners Salted Veggie Crisps", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 450.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Snow peas", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 240.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 4.0, "Calories": 0.0, "Phosphorus": 60.0 } },
+      { "name": "Spinach", "nutrientsPer100g": { "Protein": 2.9, "Potassium": 466.0, "Carbs": 4.0, "Fiber": 0.0, "Sugar": 0.4, "Calories": 23.0, "Phosphorus": 41.0 } },
+      { "name": "Squash", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 350.0, "Carbs": 8.59, "Fiber": 0.0, "Sugar": 3.0, "Calories": 0.0, "Phosphorus": 42.0 } },
+      { "name": "String beans", "nutrientsPer100g": { "Protein": 1.8, "Potassium": 209.0, "Carbs": 7.0, "Fiber": 0.0, "Sugar": 3.3, "Calories": 31.0, "Phosphorus": 50.0 } },
+      { "name": "Zuchinni", "nutrientsPer100g": { "Protein": 1.2, "Potassium": 264.0, "Carbs": 2.7, "Fiber": 0.0, "Sugar": 1.7, "Calories": 15.0, "Phosphorus": 30.0 } },
+      { "name": "Taro Root", "nutrientsPer100g": { "Protein": 1.5, "Potassium": 591.0, "Carbs": 24.46, "Fiber": 4.1, "Sugar": 0.4, "Calories": 112.0, "Phosphorus": 48.0 } },
+      { "name": "Tofu", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 0.0, "Carbs": 1.9, "Fiber": 0.0, "Sugar": 0.5, "Calories": 0.0, "Phosphorus": 200.0 } },
+      { "name": "Zuchinni-Veggie Spirals", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 264.0, "Carbs": 2.7, "Fiber": 0.0, "Sugar": 2.5, "Calories": 0.0, "Phosphorus": 30.0 } },
+      { "name": "Sweet Chili 15gm=30mgs", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 255.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 78.0 } },
+      { "name": "Vegie Crisps-Rice-Peas-Black Beans", "nutrientsPer100g": { "Protein": 10.71429, "Potassium": 821.4285714285714, "Carbs": 67.85714285714286, "Fiber": 10.714285714285715, "Sugar": 3.5714285714285716, "Calories": 464.28571428571433, "Phosphorus": 150.0 } },
+      { "name": "Honey", "nutrientsPer100g": { "Protein": 0.5, "Potassium": 52.0, "Carbs": 80.0, "Fiber": 0.0, "Sugar": 80.0, "Calories": 250.0, "Phosphorus": 0.0 } },
+      { "name": "Cinnamon", "nutrientsPer100g": { "Protein": 0.02, "Potassium": 3.0, "Carbs": 0.46, "Fiber": 0.3, "Sugar": 0.01, "Calories": 2.0, "Phosphorus": 0.0 } },
+      { "name": "Vitamin Supplements", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 0.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Spirulina/capsule ", "nutrientsPer100g": { "Protein": 4.02, "Potassium": 0.0, "Carbs": 1.67, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Coconut Water ", "nutrientsPer100g": { "Protein": 0.3, "Potassium": 400.0, "Carbs": 11.0, "Fiber": 0.0, "Sugar": 6.0, "Calories": 45.0, "Phosphorus": 0.0 } },
+      { "name": "Coffee, 1/4 tspn cinnamon", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 49.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Tea", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 21.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Tea Blkberry-Citrus/bag", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 30.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 10.0 } },
+      { "name": "Ginger tea 1 cup", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 21.3, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Honey-Canadian No Name Brand", "nutrientsPer100g": { "Protein": 0.5, "Potassium": 50.0, "Carbs": 80.0, "Fiber": 0.2, "Sugar": 80.0, "Calories": 300.0, "Phosphorus": 10.0 } },
+      { "name": "Boost", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 350.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 250.0 } },
+      { "name": "Prune Nectare", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 260.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Condensed Milk", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 371.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Deserts and Filipino Delights", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 0.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 0.0, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Lava cake-KETO", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 181.0, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 1.9, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Lava cake-Ganache", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 35.625, "Carbs": 0.0, "Fiber": 0.0, "Sugar": 34.11764705882353, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Sapin sapin ", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 185.0, "Carbs": 73.0, "Fiber": 0.0, "Sugar": 44.70588235294118, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Leche Flan", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 170.3499079189687, "Carbs": 37.569060773480665, "Fiber": 0.0, "Sugar": 36.83, "Calories": 0.0, "Phosphorus": 0.0 } },
+      { "name": "Organic Super Greens ", "nutrientsPer100g": { "Protein": 2.3529411764705883, "Potassium": 435.29411764705884, "Carbs": 40.0, "Fiber": 2.3529411764705883, "Sugar": 2.3529411764705883, "Calories": 23.529411764705884, "Phosphorus": 0.0 } },
+      { "name": "Smoked Sausage-Canadian Cheddar", "nutrientsPer100g": { "Protein": 13.0, "Potassium": 700.0, "Carbs": 5.0, "Fiber": 0.0, "Sugar": 2.0, "Calories": 57.14286, "Phosphorus": 0.0 } },
+      { "name": "Smoked Sausage-Honey Garlic", "nutrientsPer100g": { "Protein": 13.0, "Potassium": 750.0, "Carbs": 10.0, "Fiber": 0.0, "Sugar": 6.0, "Calories": 330.0, "Phosphorus": 0.0 } },
+      { "name": "Riced Veggies-Lime Cilantro", "nutrientsPer100g": { "Protein": 2.3529411764705883, "Potassium": 176.47058823529412, "Carbs": 8.23529411764706, "Fiber": 2.3529411764705883, "Sugar": 2.3529411764705883, "Calories": 58.82352941176471, "Phosphorus": 0.0 } },
+      { "name": "Organic Edamame Spaghett (Uncooked)", "nutrientsPer100g": { "Protein": 42.35294117647059, "Potassium": 2235.294117647059, "Carbs": 36.470588235294116, "Fiber": 23.529411764705884, "Sugar": 0.0, "Calories": 329.4117647058824, "Phosphorus": 0.0 } },
+      { "name": "Veggie Burger", "nutrientsPer100g": { "Protein": 23.529411764705884, "Potassium": 529.4117647058823, "Carbs": 10.588235294117647, "Fiber": 2.3529411764705883, "Sugar": 0.0, "Calories": 282.3529411764706, "Phosphorus": 0.0 } },
+      { "name": "Bean Vermicelli-(Wholesome Food)", "nutrientsPer100g": { "Protein": 0.0, "Potassium": 142.85714285714286, "Carbs": 12.0, "Fiber": 23.53, "Sugar": 0.0, "Calories": 352.94117647058823, "Phosphorus": 0.0 } },
+      { "name": "Whole Milk", "nutrientsPer100g": { "Protein": 30.0, "Potassium": 1333.3333333333335, "Carbs": 40.0, "Fiber": 0.0, "Sugar": 40.0, "Calories": 500.0, "Phosphorus": 0.0 } },
+      { "name": "Pizza-Cauliflower Crust (Siciliana)", "nutrientsPer100g": { "Protein": 6.666666666666666, "Potassium": 179.48717948717947, "Carbs": 28.205128205128204, "Fiber": 3.5897435897435894, "Sugar": 3.0769230769230766, "Calories": 184.61538461538458, "Phosphorus": 0.0 } },
+      { "name": "Pizza-Cauliflower Crust (Beyond Beef)", "nutrientsPer100g": { "Protein": 4.615384615384615, "Potassium": 153.84615384615384, "Carbs": 27.69230769230769, "Fiber": 3.5897435897435894, "Sugar": 4.102564102564102, "Calories": 158.97435897435895, "Phosphorus": 0.0 } },
+      { "name": "Instant Oats", "nutrientsPer100g": { "Protein": 13, "Potassium": 362, "Carbs": 61, "Fiber": 10, "Sugar": 1, "Calories": 389, "Phosphorus": 410 } },
+      { "name": "Oats", "nutrientsPer100g": { "Protein": 12, "Potassium": 429, "Carbs": 66, "Fiber": 10, "Sugar": 1, "Calories": 390, "Phosphorus": 410 } },
+      { "name": "Cornflakes", "nutrientsPer100g": { "Protein": 7, "Potassium": 64, "Carbs": 84, "Fiber": 2, "Sugar": 7, "Calories": 357, "Phosphorus": 0 } },
+      { "name": "Wheat Bread", "nutrientsPer100g": { "Protein": 12, "Potassium": 115, "Carbs": 46, "Fiber": 6, "Sugar": 8, "Calories": 265, "Phosphorus": 0 } },
+      { "name": "White Bread", "nutrientsPer100g": { "Protein": 7, "Potassium": 115, "Carbs": 46, "Fiber": 1, "Sugar": 8, "Calories": 265, "Phosphorus": 0 } },
+      { "name": "Brown Bread", "nutrientsPer100g": { "Protein": 8, "Potassium": 115, "Carbs": 42, "Fiber": 2, "Sugar": 4, "Calories": 250, "Phosphorus": 0 } },
+      { "name": "White Fish", "nutrientsPer100g": { "Protein": 20, "Potassium": 380, "Carbs": 0, "Fiber": 0, "Sugar": 0, "Calories": 100, "Phosphorus": 200 } },
+      { "name": "Tuna", "nutrientsPer100g": { "Protein": 23, "Potassium": 320, "Carbs": 0, "Fiber": 0, "Sugar": 0, "Calories": 132, "Phosphorus": 280 } },
+      { "name": "Chicken Breast", "nutrientsPer100g": { "Protein": 31, "Potassium": 256, "Carbs": 0, "Fiber": 0, "Sugar": 0, "Calories": 165, "Phosphorus": 196 } },
+      { "name": "Egg", "nutrientsPer100g": { "Protein": 13, "Potassium": 126, "Carbs": 1, "Fiber": 0, "Sugar": 1, "Calories": 155, "Phosphorus": 86 } },
+      { "name": "Tofu", "nutrientsPer100g": { "Protein": 8, "Potassium": 121, "Carbs": 2, "Fiber": 1, "Sugar": 0, "Calories": 76, "Phosphorus": 97 } },
+      { "name": "Spinach", "nutrientsPer100g": { "Protein": 2.9, "Potassium": 558, "Carbs": 3.6, "Fiber": 2.2, "Sugar": 0.4, "Calories": 23, "Phosphorus": 49 } },
+      { "name": "Broccoli", "nutrientsPer100g": { "Protein": 2.8, "Potassium": 316, "Carbs": 7, "Fiber": 2.6, "Sugar": 1.7, "Calories": 34, "Phosphorus": 66 } },
+      { "name": "Carrots", "nutrientsPer100g": { "Protein": 0.9, "Potassium": 320, "Carbs": 10, "Fiber": 3, "Sugar": 4.7, "Calories": 41, "Phosphorus": 35 } },
+      { "name": "Apple", "nutrientsPer100g": { "Protein": 0.3, "Potassium": 107, "Carbs": 14, "Fiber": 2.4, "Sugar": 10, "Calories": 52, "Phosphorus": 11 } },
+      { "name": "Banana", "nutrientsPer100g": { "Protein": 1.3, "Potassium": 358, "Carbs": 23, "Fiber": 2.6, "Sugar": 12, "Calories": 96, "Phosphorus": 22 } },
+      { "name": "Orange", "nutrientsPer100g": { "Protein": 0.9, "Potassium": 181, "Carbs": 12, "Fiber": 2.4, "Sugar": 9, "Calories": 43, "Phosphorus": 14 } },
+      { "name": "Milk 1 cup", "nutrientsPer100g": { "Protein": 3.4, "Potassium": 150, "Carbs": 5, "Fiber": 0, "Sugar": 5, "Calories": 42, "Phosphorus": 90 } },
+      { "name": "Butter", "nutrientsPer100g": { "Protein": 0.5, "Potassium": 24, "Carbs": 0, "Fiber": 0, "Sugar": 0, "Calories": 717, "Phosphorus": 24 } }
+  ];
+
+  const foodInput = document.getElementById('food-input');
+  const foodsDatalist = document.getElementById('foods');
+  const weightInput = document.getElementById('weight-input');
+  const datetimeInput = document.getElementById('datetime-input');
+  const addMealBtn = document.getElementById('add-meal-btn');
+  const mealsTableBody = document.querySelector('#meals-table tbody');
+  const monthSelect = document.getElementById('month-select');
+  const loadMonthBtn = document.getElementById('load-month-btn');
+  const downloadCombinedCsvBtn = document.getElementById('download-combined-csv-btn');
+  const downloadCombinedXlsxBtn = document.getElementById('download-combined-xlsx-btn');
+  const monthlySummaryTableBody = document.querySelector('#monthly-summary-table tbody');
+
+  function populateDatalist() {
+    foodsDatalist.innerHTML = '';
+    foodData.forEach(food => {
+      const option = document.createElement('option');
+      option.value = food.name.trim();
+      foodsDatalist.appendChild(option);
+    });
+  }
+  populateDatalist();
+
+  function setCurrentDatetimeLocal() {
+    const now = new Date();
+    const offsetMs = now.getTimezoneOffset()*60*1000;
+    const localISOTime = new Date(now - offsetMs).toISOString().slice(0,16);
+    datetimeInput.value = localISOTime;
+  }
+  setCurrentDatetimeLocal();
+
+  function findFoodByName(name) {
+    const lower = name.trim().toLowerCase();
+    return foodData.find(f => f.name.trim().toLowerCase() === lower);
+  }
+
+  function loadAllMeals() {
+    const allMeals = JSON.parse(localStorage.getItem('diabetesMealsAll') || '[]');
+    return allMeals;
+  }
+
+  function saveAllMeals(meals) {
+    localStorage.setItem('diabetesMealsAll', JSON.stringify(meals));
+  }
+
+  function calculateNutrients(food, weight) {
+    const scale = weight / 100;
+    const nutrients = {};
+    for (const [key, val] of Object.entries(food.nutrientsPer100g)) {
+      let numVal = Number(val);
+      if (isNaN(numVal)) numVal = 0;
+      nutrients[key] = numVal * scale;
+    }
+    return nutrients;
+  }
+
+  function renderMealsTable() {
+    const meals = loadAllMeals();
+    meals.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    mealsTableBody.innerHTML = '';
+    if (meals.length === 0) {
+      mealsTableBody.innerHTML = '<tr><td colspan="11" style="text-align:center">No meals added yet.</td></tr>';
+      return;
+    }
+    meals.forEach((meal, i) => {
+      const dt = new Date(meal.timestamp);
+      const formattedDate = dt.toLocaleString();
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="timestamp-cell" title="${meal.timestamp}">${formattedDate}</td>
+        <td>${meal.foodName}</td>
+        <td>${meal.weight}</td>
+        <td>${meal.nutrients.Protein.toFixed(2)}</td>
+        <td>${meal.nutrients.Potassium.toFixed(2)}</td>
+        <td>${meal.nutrients.Carbs.toFixed(2)}</td>
+        <td>${meal.nutrients.Fiber.toFixed(2)}</td>
+        <td>${meal.nutrients.Sugar.toFixed(2)}</td>
+        <td>${meal.nutrients.Calories.toFixed(2)}</td>
+        <td>${meal.nutrients.Phosphorus.toFixed(2)}</td>
+        <td><button data-index="${i}" class="remove-btn">✕</button></td>
+      `;
+      mealsTableBody.appendChild(tr);
+    });
+  }
+
+  addMealBtn.addEventListener('click', () => {
+    const foodName = foodInput.value.trim();
+    const weight = parseFloat(weightInput.value);
+    const datetimeVal = datetimeInput.value;
+    if (!foodName) {
+      alert('Please select or type a food item.');
+      foodInput.focus();
+      return;
+    }
+    if (isNaN(weight) || weight <= 0) {
+      alert('Please enter a valid weight in grams.');
+      weightInput.focus();
+      return;
+    }
+    if (!datetimeVal) {
+      alert('Please enter date and time.');
+      datetimeInput.focus();
+      return;
+    }
+    const food = findFoodByName(foodName);
+    if (!food) {
+      alert('Food not found in database.');
+      foodInput.focus();
+      return;
+    }
+    const nutrients = calculateNutrients(food, weight);
+    const meals = loadAllMeals();
+    meals.push({foodName, weight, nutrients, timestamp: datetimeVal});
+    saveAllMeals(meals);
+    renderMealsTable();
+    foodInput.value = '';
+    weightInput.value = '100';
+    setCurrentDatetimeLocal();
+  });
+
+  mealsTableBody.addEventListener('click', e => {
+    if (!e.target.classList.contains('remove-btn')) return;
+    const index = parseInt(e.target.dataset.index);
+    if (isNaN(index)) return;
+    const meals = loadAllMeals();
+    meals.splice(index, 1);
+    saveAllMeals(meals);
+    renderMealsTable();
+  });
+
+  function aggregateMonthlyData(yearMonth) {
+    const meals = loadAllMeals();
+    const totals = {
+      Protein: 0, Potassium: 0, Carbs: 0, Fiber: 0,
+      Sugar: 0, Calories: 0, Phosphorus: 0
+    };
+    meals.forEach(meal => {
+      if (meal.timestamp.startsWith(yearMonth)) {
+        for (const nut in totals) {
+          totals[nut] += meal.nutrients[nut] || 0;
+        }
+      }
+    });
+    return totals;
+  }
+
+  function renderMonthlySummary(yearMonth) {
+    monthlySummaryTableBody.innerHTML = '';
+    if (!yearMonth) {
+      monthlySummaryTableBody.innerHTML = '<tr><td colspan="2" style="text-align:center">Select a month to view summary</td></tr>';
+      return;
+    }
+    const totals = aggregateMonthlyData(yearMonth);
+    for (const [nutrient, value] of Object.entries(totals)) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${nutrient}</td><td>${value.toFixed(2)}</td>`;
+      monthlySummaryTableBody.appendChild(tr);
+    }
+  }
+
+  loadMonthBtn.addEventListener('click', () => {
+    const monthVal = monthSelect.value;
+    if (!monthVal) {
+      alert('Please select a month.');
+      return;
+    }
+    renderMonthlySummary(monthVal);
+  });
+
+  // Combined CSV/XLSX Download functions
+  function downloadCombinedCSV(yearMonth) {
+    const meals = loadAllMeals().filter(m => m.timestamp.startsWith(yearMonth));
+    const summaryTotals = aggregateMonthlyData(yearMonth);
+
+    let csvContent = 'Nutrient,Amount\n';
+    for (const [nutrient, val] of Object.entries(summaryTotals)) {
+      csvContent += `${nutrient},${val.toFixed(2)}\n`;
+    }
+    csvContent += '\n\n';
+    csvContent += 'Timestamp,Food,Weight (g),Protein,Potassium,Carbs,Fiber,Sugar,Calories,Phosphorus\n';
+    meals.forEach(m => {
+      const dtStr = new Date(m.timestamp).toLocaleString();
+      csvContent += `"${dtStr}","${m.foodName}",${m.weight},${m.nutrients.Protein.toFixed(2)},${m.nutrients.Potassium.toFixed(2)},${m.nutrients.Carbs.toFixed(2)},${m.nutrients.Fiber.toFixed(2)},${m.nutrients.Sugar.toFixed(2)},${m.nutrients.Calories.toFixed(2)},${m.nutrients.Phosphorus.toFixed(2)}\n`;
+    });
+
+    const blob = new Blob([csvContent], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `Nutrition_Report_${yearMonth}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadCombinedXLSX(yearMonth) {
+    const meals = loadAllMeals().filter(m => m.timestamp.startsWith(yearMonth));
+    const summaryTotals = aggregateMonthlyData(yearMonth);
+
+    const summaryRows = [['Nutrient', 'Amount']];
+    for (const [nutrient, val] of Object.entries(summaryTotals)) {
+      summaryRows.push([nutrient, parseFloat(val.toFixed(2))]);
+    }
+
+    const mealsRows = [['Timestamp','Food','Weight (g)','Protein','Potassium','Carbs','Fiber','Sugar','Calories','Phosphorus']];
+    meals.forEach(m => {
+      const dtStr = new Date(m.timestamp).toLocaleString();
+      mealsRows.push([
+        dtStr,
+        m.foodName,
+        m.weight,
+        parseFloat(m.nutrients.Protein.toFixed(2)),
+        parseFloat(m.nutrients.Potassium.toFixed(2)),
+        parseFloat(m.nutrients.Carbs.toFixed(2)),
+        parseFloat(m.nutrients.Fiber.toFixed(2)),
+        parseFloat(m.nutrients.Sugar.toFixed(2)),
+        parseFloat(m.nutrients.Calories.toFixed(2)),
+        parseFloat(m.nutrients.Phosphorus.toFixed(2))
+      ]);
+    });
+
+    const wb = XLSX.utils.book_new();
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+    const wsMeals = XLSX.utils.aoa_to_sheet(mealsRows);
+
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+    XLSX.utils.book_append_sheet(wb, wsMeals, 'Meals');
+
+    XLSX.writeFile(wb, `Nutrition_Report_${yearMonth}.xlsx`);
+  }
+
+  downloadCombinedCsvBtn.addEventListener('click', () => {
+    const monthVal = monthSelect.value;
+    if (!monthVal) {
+      alert('Select month first.');
+      return;
+    }
+    downloadCombinedCSV(monthVal);
+  });
+
+  downloadCombinedXlsxBtn.addEventListener('click', () => {
+    const monthVal = monthSelect.value;
+    if (!monthVal) {
+      alert('Select month first.');
+      return;
+    }
+    downloadCombinedXLSX(monthVal);
+  });
+
+  // Initialize
+  renderMealsTable();
+
+  (function setDefaultMonth() {
+    const now = new Date();
+    const monthStr = now.toISOString().slice(0,7);
+    monthSelect.value = monthStr;
+  })();
+
+</script>
+
+<!-- SheetJS -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/shim.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+</body>
+</html>
